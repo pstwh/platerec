@@ -1,0 +1,2 @@
+platerec/artifacts/decoder.onnx filter=lfs diff=lfs merge=lfs -text
+platerec/artifacts/encoder.onnx filter=lfs diff=lfs merge=lfs -text
