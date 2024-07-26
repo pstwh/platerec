@@ -1,5 +1,9 @@
 # platerec
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/pstwh/platerec/main/examples/example.jpg" width="768" />
+</p>
+
 `platerec` is a lightweight package for reading license plates using an ONNX model. It is designed to be part of a pipeline for detecting, cropping, and reading license plates. The underlying model is a mobilenetv2 as encoder and a light gpt for decoder. The training data comprises primarily Brazilian license plates, sourced from internet images, also synthetic data generated in the same font with transforms. The model repository can be found [here](https://github.com/pstwh/platerec-model).
 
 ## Installation
