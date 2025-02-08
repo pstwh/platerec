@@ -6,7 +6,7 @@ import numpy as np
 import onnxruntime as ort
 import PIL
 import PIL.Image
-from platerec.config import decode, stoi
+from platerec.tokenizer import Tokenizer
 from platedet import Platedet
 
 
@@ -24,6 +24,9 @@ class Platerec:
         decoder_path: str = os.path.join(
             os.path.dirname(__file__), "artifacts", "decoder.onnx"
         ),
+        tokenizer_path: str = os.path.join(
+            os.path.dirname(__file__), "artifacts", "tokenizer.json"
+        ),
         use_platedet: bool = True,
         sess_options=ort.SessionOptions(),
         providers=["CPUExecutionProvider"],
@@ -34,6 +37,7 @@ class Platerec:
         self.decoder_session = ort.InferenceSession(
             decoder_path, sess_options=sess_options, providers=providers
         )
+        self.tokenizer = Tokenizer.load_from_json(tokenizer_path)
         if use_platedet:
             self.platedet = Platedet(sess_options=sess_options, providers=providers)
 
@@ -54,7 +58,7 @@ class Platerec:
 
         return image
 
-    def read(self, image: PIL.Image, max_new_tokens=16, return_type="word"):
+    def read(self, image: PIL.Image, max_new_tokens=32, return_type="word"):
         return_type = self._normalize_return_types(return_type)
 
         image = self.prepare_input(image).astype(np.float16)
@@ -78,30 +82,38 @@ class Platerec:
 
             idx = np.concatenate((idx, idx_next), axis=1)
 
-            if idx_next.item() == stoi[">"]:
+            if idx_next.item() == self.tokenizer.stoi[">"]:
                 break
 
         idx = idx.tolist()[0]
-
-        idx = decode(idx[1:-1])
         probs_log = probs_log[1:-1]
 
         if return_type == PlaterecOutputType.WORD:
-            return {"word": idx, "confidence": min(probs_log)}
+            return {
+                "word": self.tokenizer.decode(idx[1:-1]),
+                "confidence": min(probs_log),
+            }
         elif return_type == PlaterecOutputType.CHAR:
-            return {"chars": list(idx), "confidence": probs_log}
+            return {
+                "chars": self.tokenizer.decode(idx[1:-1], join=False),
+                "confidence": probs_log,
+            }
 
         raise ValueError(f"Invalid return type: {return_type}")
 
-    def detect_read(self, image: PIL.Image, max_new_tokens=16, return_type="word"):
-        assert self.platedet, "Platedet is not initialized. Use `use_platedet=True` when initializing Platerec."
+    def detect_read(self, image: PIL.Image, max_new_tokens=32, return_type="word"):
+        assert self.platedet, (
+            "Platedet is not initialized. Use `use_platedet=True` when initializing Platerec."
+        )
         words = []
         words_confidences = []
 
-        output = self.platedet.inference(image, return_types=["pil", "boxes"], conf_threshold=0.4)
+        output = self.platedet.inference(
+            image, return_types=["pil", "boxes"], conf_threshold=0.4
+        )
         if output == {}:
             return {"boxes": [], "words": [], "words_confidences": []}
-        
+
         boxes = output["boxes"]["boxes"]
         output = output["pil"]
         images = output["images"]
@@ -109,7 +121,7 @@ class Platerec:
             pred = self.read(
                 image, max_new_tokens=max_new_tokens, return_type=return_type
             )
-            words.append(pred["word"])
+            words.append(pred["word"] if return_type == "word" else pred["chars"])
             words_confidences.append(pred["confidence"])
 
         output["words"] = words

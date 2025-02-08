@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 from PIL import Image, ImageFont, ImageDraw
 from platerec import Platerec
+import os
 
 
 def cv2_to_pil(cv2_img):
@@ -50,14 +51,37 @@ def annotate_images(image, output, font_size):
     return image
 
 
-def main(video_path, font_size):
-    platerec = Platerec(providers=["CUDAExecutionProvider"])
+def main():
+    parser = argparse.ArgumentParser(
+        description="Annotate video frames with detected plates."
+    )
+    parser.add_argument("video_path", help="Path to the video file.")
+    parser.add_argument(
+        "--font_size", type=int, default=20, help="Font size for annotations."
+    )
+    parser.add_argument(
+        "--save_output", action="store_true", help="Save annotated video output."
+    )
+    args = parser.parse_args()
 
-    cap = cv2.VideoCapture(video_path)
+    platerec = Platerec(providers=["CUDAExecutionProvider"])
+    cap = cv2.VideoCapture(args.video_path)
 
     if not cap.isOpened():
         print("Error: Could not open video.")
         exit()
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    if args.save_output:
+        base_name, ext = os.path.splitext(args.video_path)
+        output_video_path = f"{base_name}_platerec{ext}"
+        out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+    else:
+        out = None
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -69,8 +93,11 @@ def main(video_path, font_size):
         if len(output["boxes"]) == 0:
             annotated_image = pil_image
         else:
-            annotated_image = annotate_images(pil_image, output, font_size)
+            annotated_image = annotate_images(pil_image, output, args.font_size)
         frame = pil_to_cv2(annotated_image)
+
+        if args.save_output:
+            out.write(frame)
 
         cv2.imshow("Frame", frame)
 
@@ -78,17 +105,11 @@ def main(video_path, font_size):
             break
 
     cap.release()
+    if args.save_output:
+        out.release()
+        print(f"Output video saved as: {output_video_path}")
     cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Annotate video frames with detected plates."
-    )
-    parser.add_argument("video_path", help="Path to the video file.")
-    parser.add_argument(
-        "--font_size", type=int, default=20, help="Font size for annotations."
-    )
-    args = parser.parse_args()
-
-    main(args.video_path, args.font_size)
+    main()

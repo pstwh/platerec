@@ -1,6 +1,5 @@
 import argparse
 import os
-from typing import List
 
 from PIL import Image
 
@@ -40,6 +39,13 @@ def get_args():
     )
 
     parser.add_argument(
+        "--tokenizer_path",
+        type=str,
+        default=os.path.join(os.path.dirname(__file__), "artifacts", "tokenizer.json"),
+        help="Path to the tokenizer json file (default: artifacts/tokenizer.json).",
+    )
+
+    parser.add_argument(
         "--providers",
         type=str,
         nargs="+",
@@ -48,7 +54,9 @@ def get_args():
     )
 
     parser.add_argument(
-        "--platedet", action="store_true", help="Use platedet to detect plates first."
+        "--no_platedet",
+        action="store_false",
+        help="Use platedet to detect plates first.",
     )
 
     return parser.parse_args()
@@ -59,10 +67,11 @@ def main():
     platerec = Platerec(
         encoder_path=args.encoder_path,
         decoder_path=args.decoder_path,
+        tokenizer_path=args.tokenizer_path,
         providers=args.providers,
     )
 
-    fn = platerec.detect_read if args.platedet else platerec.read
+    fn = platerec.detect_read if args.no_platedet else platerec.read
 
     for image_path in args.image_paths:
         output = fn(Image.open(image_path).convert("RGB"), return_type=args.return_type)
